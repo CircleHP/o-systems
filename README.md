@@ -34,7 +34,7 @@ A React-based web application for managing customers and orders. This project de
 
 ```sh
 git clone https://github.com/CircleHP/o-systems.git
-cd YOUR-REPO
+cd o-systems
 ```
 
 ### **3️⃣ Install Dependencies**
