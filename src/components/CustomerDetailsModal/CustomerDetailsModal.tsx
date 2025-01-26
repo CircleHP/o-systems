@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
     Modal,
@@ -15,9 +15,9 @@ import {
     TablePagination,
 } from '@mui/material';
 
-import type { Order } from '../../services/types/api';
+import type { CustomerOrder } from '../../services/types/api';
 import { formatDate } from '../../utils/formatDate';
-import { fetchOrders } from '../../services/api/orders';
+import { fetchCustomerOrders } from '../../services/api/customers';
 
 interface CustomerDetailsModalProps {
     open: boolean;
@@ -39,22 +39,28 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, onClo
     const [page, setPage] = useState(0);
 
     const { data, isLoading } = useQuery({
-        queryKey: ['allOrders'],
-        queryFn: async () => await fetchOrders({ orderBy: 'orderDate', orderByDesc: 'id', take: 1000 }),
+        queryKey: ['customerOrders', customer?.id],
+        queryFn: async () => {
+            if (!customer?.id) return { results: [] };
+            return await fetchCustomerOrders({ customerId: customer.id });
+        },
         enabled: !!customer,
     });
 
-    const filteredOrders = useMemo(
-        () => (customer ? data?.results?.filter((order) => order.customerId === customer.id) ?? [] : []),
-        [data, customer]
-    );
+    const orders = useMemo(() => data?.results ?? [], [data]);
 
-    const paginatedOrders = useMemo(
-        () => filteredOrders.slice(page * DEFAULT_ORDERS_PER_PAGE, (page + 1) * DEFAULT_ORDERS_PER_PAGE),
-        [filteredOrders, page]
-    );
+    const totalRecords = orders.length;
 
-    const hasMoreData = (page + 1) * DEFAULT_ORDERS_PER_PAGE < filteredOrders.length;
+    const paginatedOrders = useMemo(() => {
+        const startIndex = page * DEFAULT_ORDERS_PER_PAGE;
+        return orders.slice(startIndex, startIndex + DEFAULT_ORDERS_PER_PAGE);
+    }, [orders, page]);
+
+    useEffect(() => {
+        return () => {
+            setPage(0);
+        };
+    }, [open]);
 
     return (
         <Modal open={open} onClose={onClose} aria-labelledby="customer-details-modal">
@@ -121,29 +127,25 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, onClo
                                                 <TableRow>
                                                     <TableCell>Order ID</TableCell>
                                                     <TableCell>Order Date</TableCell>
-                                                    <TableCell>Required Date</TableCell>
-                                                    <TableCell>Shipped Date</TableCell>
                                                     <TableCell>Ship Name</TableCell>
-                                                    <TableCell>Ship Address</TableCell>
                                                     <TableCell>Ship City</TableCell>
                                                     <TableCell>Ship Country</TableCell>
-                                                    <TableCell>Ship Postal Code</TableCell>
                                                     <TableCell>Freight</TableCell>
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
-                                                {paginatedOrders.map((order: Order) => (
-                                                    <TableRow key={order.id}>
-                                                        <TableCell>{order.id}</TableCell>
-                                                        <TableCell>{formatDate(order.orderDate)}</TableCell>
-                                                        <TableCell>{formatDate(order.requiredDate)}</TableCell>
-                                                        <TableCell>{formatDate(order.shippedDate)}</TableCell>
-                                                        <TableCell>{order.shipName}</TableCell>
-                                                        <TableCell>{order.shipAddress}</TableCell>
-                                                        <TableCell>{order.shipCity}</TableCell>
-                                                        <TableCell>{order.shipCountry}</TableCell>
-                                                        <TableCell>{order.shipPostalCode}</TableCell>
-                                                        <TableCell>${order.freight?.toFixed(2)}</TableCell>
+                                                {paginatedOrders.map((customerOrder: CustomerOrder) => (
+                                                    <TableRow key={customerOrder.order.id}>
+                                                        <TableCell>{customerOrder.order.id}</TableCell>
+                                                        <TableCell>
+                                                            {formatDate(customerOrder.order.orderDate)}
+                                                        </TableCell>
+                                                        <TableCell>{customerOrder.order.shipName}</TableCell>
+                                                        <TableCell>{customerOrder.order.shipCity}</TableCell>
+                                                        <TableCell>{customerOrder.order.shipCountry}</TableCell>
+                                                        <TableCell>
+                                                            ${customerOrder.order.freight?.toFixed(2)}
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
@@ -153,16 +155,11 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, onClo
                                     {/* Pagination */}
                                     <TablePagination
                                         component="div"
-                                        count={filteredOrders.length}
+                                        count={totalRecords}
                                         page={page}
                                         rowsPerPage={DEFAULT_ORDERS_PER_PAGE}
-                                        onPageChange={(_, newPage) => {
-                                            if (hasMoreData || newPage < page) {
-                                                setPage(newPage);
-                                            }
-                                        }}
+                                        onPageChange={(_, newPage) => setPage(newPage)}
                                         rowsPerPageOptions={[]}
-                                        nextIconButtonProps={{ disabled: !hasMoreData }}
                                     />
                                 </>
                             ) : (
